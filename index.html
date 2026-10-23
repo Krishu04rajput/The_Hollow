@@ -31,6 +31,23 @@ input[type=range]{width:160px}select{background:#0a0e12;color:var(--fg);border:1
 #jn{position:absolute;left:25px;top:25px;width:40px;height:40px;border-radius:50%;background:#aab;opacity:.6}
 .tb{position:absolute;pointer-events:auto;min-width:0;width:58px;height:58px;border-radius:50%;padding:0;background:rgba(10,14,18,.6);font-size:13px;letter-spacing:0}
 .chk{position:fixed;top:14px;right:16px;color:#8a979f;font-size:13px;letter-spacing:.2em;z-index:9;opacity:0;transition:opacity 1s}
+
+/* THE HOLLOW: cinematic upgrade */
+:root{--red:#a3201a;--fg:#d2d9de}
+body:after{content:"";position:fixed;inset:0;z-index:6;pointer-events:none;opacity:.12;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");mix-blend-mode:soft-light}
+.ov{backdrop-filter:blur(3px)}
+#menu{background:linear-gradient(90deg,rgba(2,4,7,.92),rgba(2,4,7,.48) 48%,rgba(2,4,7,.08)),radial-gradient(ellipse at 70% 50%,rgba(94,16,16,.13),transparent 55%)}
+h1{font-family:Georgia,serif;font-size:clamp(42px,8vw,100px);letter-spacing:.24em;text-shadow:0 0 12px rgba(160,20,20,.18),0 0 50px #000}
+.sub{letter-spacing:.42em;color:#a5adb3}
+button{transition:color .25s,border-color .25s,background .25s,transform .25s;backdrop-filter:blur(4px)}
+button:hover:not(:disabled){background:rgba(130,20,20,.14);transform:translateX(4px);box-shadow:0 0 20px #5a101033}
+#sb{font-size:clamp(15px,1.4vw,19px);line-height:1.6;letter-spacing:.04em;text-shadow:0 2px 12px #000,0 0 22px #000}
+#pr{color:#e3c9a0;text-shadow:0 0 12px #000,0 2px 4px #000}
+#obj{padding:10px 12px;border-left:2px solid #a3201a;background:linear-gradient(90deg,#05070ac9,transparent);max-width:min(520px,75vw)}
+#bars{filter:drop-shadow(0 0 4px #000)}
+#fd{font-size:clamp(13px,2vw,19px);text-align:center;background:radial-gradient(ellipse,rgba(30,0,0,.12),rgba(0,0,0,.98));text-shadow:0 0 22px #a3201a}
+.chk{padding:8px 12px;border:1px solid #9d9a6c44;background:#080b0dcc}
+@media(max-width:650px){#menu{padding-left:7vw}button{min-width:190px}.sub{letter-spacing:.22em}}
 </style></head><body>
 <div id="vg"></div>
 <div id="hud"><div id="obj"></div><div id="pr"></div><div id="bars"><i id="st"></i><i id="ba"></i></div></div>
@@ -385,4 +402,135 @@ function extras(dt){
  wl.intensity=wM.color.r<.5?.1:1.1;fi.material.color.setHex(G.power?0x2aff6a:0xff2a1a);fl2.color.setHex(G.power?0x2aff6a:0xff2a1a);
  if(mode=='play'){st2+=dt;if(st2>.25){st2=0;sg.beginPath();sg.arc(mxp(P.x),myp(P.z),38,0,6.3);sg.fill();EV.lm=EV.lm||{};LM.forEach(l=>{if(Math.hypot(P.x-l[1],P.z-l[2])<10)EV.lm[l[0]]=1})}}}
 loop();
-</script></body></html>
+</script>
+<script>
+/* ===== THE HOLLOW: director's cut ambience + environmental storytelling ===== */
+(()=>{
+ const $=id=>document.getElementById(id);
+ // Smooth, adaptive low-key score: detuned piano-like notes, sub-bass and a distant bell.
+ let scoreTimer=null, scoreNodes=[], scoreStep=0, scoreOn=false;
+ const scale=[0,3,7,10,12,15,19,22], root=43.65;
+ function scoreNote(){
+   if(typeof AC==='undefined'||!bus||!bus.m||AC.state==='closed')return;
+   const now=AC.currentTime, tense=(typeof H!=='undefined'&&['chase','attack'].includes(H.s))?1:0;
+   const idx=(scoreStep*3+Math.floor(Math.random()*3))%scale.length;
+   const freq=root*Math.pow(2,scale[idx]/12)*(Math.random()<.22?2:1);
+   const o=AC.createOscillator(),g=AC.createGain(),lp=AC.createBiquadFilter();
+   o.type=scoreStep%4===0?'triangle':'sine';o.frequency.setValueAtTime(freq,now);
+   o.detune.setValueAtTime((Math.random()-.5)*9,now);
+   lp.type='lowpass';lp.frequency.value=tense?520:900;
+   g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(tense?.055:.025,now+.08);
+   g.gain.exponentialRampToValueAtTime(.0001,now+(tense?1.8:3.8));
+   o.connect(lp);lp.connect(g);g.connect(bus.m);o.start(now);o.stop(now+(tense?1.9:4));
+   scoreNodes.push(o);scoreStep++;
+   // A rare, distant metallic overtone makes the score feel less repetitive.
+   if(scoreStep%5===0){const b=AC.createOscillator(),bg=AC.createGain();b.type='sine';b.frequency.value=freq*2.01;bg.gain.setValueAtTime(.0001,now);bg.gain.linearRampToValueAtTime(.012,now+.12);bg.gain.exponentialRampToValueAtTime(.0001,now+2.4);b.connect(bg);bg.connect(bus.m);b.start(now);b.stop(now+2.5)}
+ }
+ const oldAud=window.aud;
+ if(typeof oldAud==='function')window.aud=function(){oldAud();if(!scoreOn){scoreOn=true;scoreTimer=setInterval(scoreNote,2200);setTimeout(scoreNote,700)}};
+ // Environmental story fragments: short, optional discoveries that enrich Arin/Mira's history.
+ let storyFlags={};
+ function fragment(key,who,line){
+   if(storyFlags[key]||typeof say!=='function'||mode!=='play')return;
+   storyFlags[key]=1;
+   if(typeof snd==='function')try{snd('whisper',new THREE.Vector3(P.x-1,1.5,P.z-2))}catch(e){}
+   say(who,line,4800);
+ }
+ const oldUpd=window.upd;
+ // The main loop's updater is local in the original file, so add an independent, low-cost director tick.
+ let last=0;
+ function director(){
+   requestAnimationFrame(director);
+   if(typeof P==='undefined'||typeof H==='undefined'||mode!=='play')return;
+   const z=P.z,x=P.x,now=performance.now();
+   if(z<-18&&z>-24)fragment('roadmemory','Mira?','“You promised you would count to ten before opening the door.”');
+   if(z<-43&&z>-49)fragment('busmemory','Arin','I remember the bus. I remember the rain. Why can’t I remember getting here?');
+   if(z<-67&&z>-70&&x>3)fragment('wallvoice','The Witness','“The house keeps what the family cannot bear to remember.”');
+   if(z<-77&&z>-80&&x>1&&x<6)fragment('bedroom','Mira?','“Nine fifteen. You always came back for one more story.”');
+   // Brief, slow exposure pulses during play make darkness feel alive, without flashing.
+   if(typeof R!=='undefined'&&typeof S!=='undefined'&&S.q&&now%17000<45)R.toneMappingExposure=Math.max(.72,S.bri*.82);
+   else if(typeof R!=='undefined'&&typeof S!=='undefined'&&S.bri)R.toneMappingExposure+=(S.bri-R.toneMappingExposure)*.025;
+ }
+ // Add a little depth to the title/intro with an understated status line.
+ const menu=$('menu');
+ if(menu&&!$('directorTag')){const d=document.createElement('div');d.id='directorTag';d.textContent='A PSYCHOLOGICAL HORROR EXPERIENCE  ·  CHAPTER I';d.style.cssText='margin-top:28px;color:#59636b;font:10px Georgia,serif;letter-spacing:.24em;max-width:300px;line-height:2';menu.appendChild(d)}
+ // A more useful map hint for keyboard players, without changing existing game progression.
+ const help=$('ps');
+ if(help){const p=document.createElement('div');p.className='pn';p.style.cssText='font-size:12px;color:#737e86;margin-top:8px';p.textContent='Tip: sound carries. Sprint only when you must; crouch and darkness can keep the Witness from finding you.';help.appendChild(p)}
+ director();
+})();
+</script>
+<script>
+/* ===== THE HOLLOW: Chapter I update — memory echoes + apparition director ===== */
+(()=>{
+ const $=id=>document.getElementById(id);
+ // Three optional memory echoes: small discoveries that deepen the main mystery.
+ const echoes=[
+  {id:'echoRoad',x:-5.2,z:-20,title:'ECHO 01 — THE PROMISE',text:'A child’s voice, trapped in the rain: “You said you would count to ten. You said I could come out when you finished.” The memory feels familiar, but Arin cannot remember who was hiding.'},
+  {id:'echoBus',x:5.8,z:-42,title:'ECHO 02 — THE PASSENGER',text:'A torn seat belt hangs from the wreck. For one second, Arin remembers a second child beside him — then the memory folds in on itself. Someone has carefully removed the passenger’s name.'},
+  {id:'echoHouse',x:6.4,z:-72,title:'ECHO 03 — THE ANCHOR',text:'A whisper repeats a phrase from the patient file: “The anchor does not remember. The anchor makes everyone else remember.” The voice sounds exactly like Arin.'}
+ ];
+ const echoMeshes={};
+ echoes.forEach(e=>{D[e.id]=[e.title,e.text]});
+ echoes.forEach((e,i)=>{
+  const g=new THREE.Group();
+  const core=new THREE.Mesh(new THREE.OctahedronGeometry(.22,1),new THREE.MeshStandardMaterial({color:0x9ad9e8,emissive:0x2a8da5,emissiveIntensity:1.5,transparent:true,opacity:.9,roughness:.22,metalness:.2}));
+  const halo=new THREE.Mesh(new THREE.SphereGeometry(.38,12,10),new THREE.MeshBasicMaterial({color:0x65b9d1,transparent:true,opacity:.10,depthWrite:false}));
+  g.add(core,halo);g.position.set(e.x,.95,e.z);scene.add(g);echoMeshes[e.id]={g,core,halo};
+  I.push({p:new V3(e.x,.95,e.z),l:'Recover a memory echo',on:()=>!EV[e.id],f:()=>{
+   EV[e.id]=1;g.visible=false;G.docs=G.docs||[];if(!G.docs.includes(e.id))G.docs.push(e.id);sv('hollowG',G);
+   $('dt').textContent=e.title;$('db').innerHTML=e.text;openUI('dc');snd('ring');
+   const count=echoes.filter(q=>EV[q.id]).length;objv(count===3?'All memory echoes recovered. The house knows you are listening.':`Memory echo recovered (${count}/3). Find the remaining echoes.`);
+  }});
+ });
+ // Add journal labels to the inventory list without altering the original documents.
+ const oldInv=inv;
+ window.inv=function(){oldInv();const el=$('iv');if(el){const found=echoes.filter(e=>EV[e.id]);if(found.length)el.innerHTML+='<br><br><u>Memory echoes</u><br>'+found.map(e=>'• '+e.title).join('<br>')}};
+ // A low-poly silhouette appears at a distance when the player looks away.
+ // It is a scripted apparition, not a lethal enemy, so it adds dread without breaking progression.
+ const apparition=new THREE.Group();
+ const shadowMat=new THREE.MeshStandardMaterial({color:0x020305,roughness:1,transparent:true,opacity:0,emissive:0x03060a,emissiveIntensity:.2,side:THREE.DoubleSide});
+ const torso=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.95,3,5),shadowMat);torso.position.y=1.25;apparition.add(torso);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.22,8,6),shadowMat);head.position.y=2.05;apparition.add(head);
+ const armMat=new THREE.MeshStandardMaterial({color:0x010203,roughness:1,transparent:true,opacity:0});
+ for(const side of [-1,1]){const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.07,.9,2,4),armMat);arm.position.set(side*.37,1.25,.02);arm.rotation.z=side*-.13;apparition.add(arm)}
+ scene.add(apparition);
+ let apparitionAlpha=0, apparitionTimer=0, apparitionCooldown=11, lastWhisper=0, lastPulse=0;
+ function dist2(x1,z1,x2,z2){return Math.hypot(x1-x2,z1-z2)}
+ function directorV3(){
+  requestAnimationFrame(directorV3);
+  if(typeof P==='undefined'||typeof mode==='undefined'||mode!=='play'||ui){apparitionAlpha=Math.max(0,apparitionAlpha-.04);setOpacity();return}
+  const dt=Math.min(.05,(performance.now()-lastPulse)/1000||.016);lastPulse=performance.now();
+  apparitionTimer+=dt;apparitionCooldown-=dt;
+  echoes.forEach((e,i)=>{const o=echoMeshes[e.id];if(o&&o.g.visible){o.g.rotation.y+=dt*(i%2?-.6:.8);o.core.rotation.x+=dt*.45;o.halo.scale.setScalar(1+Math.sin(apparitionTimer*2+i)*.09)}});
+  const threat=typeof H!=='undefined'&&['chase','attack','search'].includes(H.s);
+  // Schedule apparitions only in play, never during the intro or while a UI is open.
+  if(apparitionCooldown<=0&&apparitionAlpha<.02&&!P.hid&&!threat&&Math.random()<.018){
+   const angle=P.yaw+(Math.random()<.5?Math.PI/2:-Math.PI/2)+(Math.random()-.5)*.55;
+   const distance=8+Math.random()*4;
+   apparition.position.set(P.x-Math.sin(angle)*distance,0,P.z-Math.cos(angle)*distance);
+   apparition.rotation.y=Math.atan2(P.x-apparition.position.x,P.z-apparition.position.z);
+   apparitionAlpha=.0;apparitionTimer=0;apparitionCooldown=20+Math.random()*18;
+   if(typeof snd==='function'&&performance.now()-lastWhisper>9000){try{snd('whisper',new THREE.Vector3(apparition.position.x,1.5,apparition.position.z));lastWhisper=performance.now()}catch(e){}}
+  }
+  // It fades in briefly, then vanishes when noticed or after a few seconds.
+  const dx=apparition.position.x-P.x,dz=apparition.position.z-P.z;
+  const bearing=Math.atan2(-dx,-dz),delta=Math.atan2(Math.sin(bearing-P.yaw),Math.cos(bearing-P.yaw));
+  const inView=Math.abs(delta)<.65;
+  if(apparitionAlpha>.01){if(inView||apparitionTimer>4.8)apparitionAlpha=Math.max(0,apparitionAlpha-dt*.85);else apparitionAlpha=Math.min(.72,apparitionAlpha+dt*.34)}
+  setOpacity();
+  // The score gets subtly louder when the Witness is actively hunting.
+  if(typeof bus!=='undefined'&&bus.m&&typeof AC!=='undefined'&&AC&&AC.state==='running'){
+   const target=threat?.28:.18;
+   bus.m.gain.setTargetAtTime(Math.min(1,Math.max(0,(S.mv||.5)*target)),AC.currentTime,.8);
+  }
+ }
+ function setOpacity(){shadowMat.opacity=apparitionAlpha;armMat.opacity=apparitionAlpha*.9;apparition.visible=apparitionAlpha>.015}
+ // Keep existing global controls intact; this is an additive director layer.
+ const menu=$('menu');
+ if(menu&&!$('echoTag')){const tag=document.createElement('div');tag.id='echoTag';tag.textContent='NEW: 3 HIDDEN MEMORY ECHOES';tag.style.cssText='margin:10px auto 0;color:#7797a0;font:10px Georgia,serif;letter-spacing:.18em;opacity:.8';menu.appendChild(tag)}
+ directorV3();
+})();
+
+</script>
+</body></html>
