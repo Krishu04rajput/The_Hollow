@@ -48,6 +48,28 @@ button:hover:not(:disabled){background:rgba(130,20,20,.14);transform:translateX(
 #fd{font-size:clamp(13px,2vw,19px);text-align:center;background:radial-gradient(ellipse,rgba(30,0,0,.12),rgba(0,0,0,.98));text-shadow:0 0 22px #a3201a}
 .chk{padding:8px 12px;border:1px solid #9d9a6c44;background:#080b0dcc}
 @media(max-width:650px){#menu{padding-left:7vw}button{min-width:190px}.sub{letter-spacing:.22em}}
+
+/* Reliability patch: keep the landing-page controls above the WebGL canvas. */
+.ov{z-index:100!important;pointer-events:auto!important}
+.ov button,.ov input,.ov select,.ov label{position:relative;z-index:101;pointer-events:auto}
+canvas{z-index:0}
+#fd{z-index:110;pointer-events:none}
+#vg{z-index:5;pointer-events:none}
+
+/* ENVIRONMENT REWORK: readable diegetic documents and richer world props */
+#dc{background:rgba(3,4,5,.91)!important;backdrop-filter:blur(7px)}
+#dc h2{width:min(680px,88vw);margin:0 auto;padding:18px 24px 10px;background:#d6c7a4;color:#31291e;border:1px solid #8f8063;border-bottom:0;box-shadow:0 18px 45px #0008;letter-spacing:.12em}
+#db{width:min(680px,88vw);max-height:55vh;overflow:auto;text-align:left;padding:25px 30px 32px;background:
+ radial-gradient(ellipse at 20% 15%,#fff8dfaa,transparent 50%),
+ repeating-linear-gradient(0deg,#d9cba9 0px,#d9cba9 25px,#cbbd9c 26px,#d9cba9 27px);
+ color:#30291f;border:1px solid #8f8063;border-top:1px dashed #8f8063;
+ box-shadow:0 22px 55px #000a;font:clamp(16px,2vw,20px)/1.85 Georgia,serif;
+ white-space:normal;position:relative;transform:rotate(-.35deg)}
+#db:before{content:"";position:absolute;left:22px;top:0;bottom:0;border-left:1px solid #a45a4a66;pointer-events:none}
+#db b{color:#7a211c;font-weight:bold}
+#dc #dX{margin-top:16px;background:#080b0e}
+#dt{font-size:clamp(13px,2vw,19px)!important;color:#d7c9a8!important;letter-spacing:.18em!important}
+
 </style></head><body>
 <div id="vg"></div>
 <div id="hud"><div id="obj"></div><div id="pr"></div><div id="bars"><i id="st"></i><i id="ba"></i></div></div>
@@ -81,6 +103,34 @@ button:hover:not(:disabled){background:rgba(130,20,20,.14);transform:translateX(
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const V3=THREE.Vector3,$=i=>document.getElementById(i),rnd=(a,b)=>a+Math.random()*(b-a);
+// Three.js r128 does not include CapsuleGeometry in its core build.
+// Provide a compatible capsule using LatheGeometry so initialization can continue.
+if(!THREE.CapsuleGeometry){
+  THREE.CapsuleGeometry=class CapsuleGeometry extends THREE.LatheGeometry{
+    constructor(radius=.5,length=1,capSegments=4,radialSegments=8){
+      const pts=[];
+      const steps=Math.max(3,capSegments*2);
+      for(let i=0;i<=steps;i++){
+        const a=-Math.PI/2+(Math.PI/2)*(i/steps);
+        pts.push(new THREE.Vector2(
+          Math.max(.0001,radius*Math.cos(a)),
+          -length/2+radius*Math.sin(a)
+        ));
+      }
+      pts.push(new THREE.Vector2(radius,length/2));
+      for(let i=1;i<=steps;i++){
+        const a=(Math.PI/2)*(i/steps);
+        pts.push(new THREE.Vector2(
+          Math.max(.0001,radius*Math.cos(a)),
+          length/2+radius*Math.sin(a)
+        ));
+      }
+      super(pts,Math.max(6,radialSegments));
+      this.type='CapsuleGeometry';
+      this.parameters={radius,length,capSegments,radialSegments};
+    }
+  };
+}
 function ld(k){try{return JSON.parse(localStorage.getItem(k))||{}}catch(e){return{}}}
 function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 const S=Object.assign({sens:1,bri:1,mv:.6,dv:.9,sv:.8,sub:1,q:1,fov:75,inv:0,noEnemy:0},ld('hollowS'));
@@ -598,6 +648,241 @@ loop();
  applyEnemyMode();creatureMotion();
  // If safe mode is enabled mid-session, the creature stays absent and the score remains calm.
  const oldIntro=typeof start==='function'?start:null;
+})();
+</script>
+
+
+<script>
+window.addEventListener('error',function(e){
+  if(e.message && /THREE|CapsuleGeometry|WebGL/i.test(e.message)){
+    let box=document.getElementById('startupError');
+    if(!box){
+      box=document.createElement('div');box.id='startupError';
+      box.style.cssText='position:fixed;z-index:9999;left:5%;right:5%;bottom:18px;padding:14px 16px;background:#170b0b;border:1px solid #8c3535;color:#f0dada;font:14px/1.5 Arial,sans-serif;white-space:pre-wrap';
+      document.body.appendChild(box);
+    }
+    box.textContent='THE HOLLOW could not initialize its 3D engine. Check your internet connection (the game loads Three.js from a CDN), then reload the page. Details: '+e.message;
+  }
+});
+</script>
+
+
+<script>
+/* ===== THE HOLLOW: tactile prop, house and path reconstruction ===== */
+(()=>{
+ if(!window.THREE || typeof scene==='undefined') return;
+ const V=THREE.Vector3;
+ const mat=(color,roughness=0.9,metalness=0,map=null,opts={})=>
+   new THREE.MeshStandardMaterial({color,roughness,metalness,map,...opts});
+ const add=(g,x,y,z,m,cast=true,receive=true)=>{
+   const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=cast;o.receiveShadow=receive;scene.add(o);return o;
+ };
+ const wood=mat(0x30241b,.92,0),woodEdge=mat(0x594332,.85,0),
+       rust=mat(0x49372b,.8,.35),paper=mat(0xd8cba9,.96,0),
+       ink=mat(0x29251e,.95),dark=mat(0x090b0c,1),
+       glass=mat(0x26333a,.22,.2,null,{transparent:true,opacity:.42}),
+       plaster=mat(0x454644,.98),roofMat=mat(0x191b1a,.95),
+       brass=mat(0x85663b,.42,.72),rubber=mat(0x111313,.95);
+ function canvasTex(draw,w=512,h=512){
+   const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
+   draw(x,w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;return t;
+ }
+ const paperTex=canvasTex((x,w,h)=>{
+   x.fillStyle='#d8cba8';x.fillRect(0,0,w,h);
+   for(let i=0;i<1700;i++){const a=Math.random();x.fillStyle=`rgba(${a>.5?65:255},${a>.5?47:255},${a>.5?28:255},${Math.random()*.12})`;x.fillRect(Math.random()*w,Math.random()*h,Math.random()*12+1,Math.random()*4+1)}
+   x.strokeStyle='#bba987';x.lineWidth=2;
+   for(let y=58;y<h-15;y+=31){x.beginPath();x.moveTo(38,y);x.lineTo(w-24,y);x.stroke()}
+   x.strokeStyle='#a65d4c88';x.beginPath();x.moveTo(29,0);x.lineTo(29,h);x.stroke();
+   x.fillStyle='#32291f';x.font='bold 24px Georgia';x.fillText('MIRA — PRIVATE',48,42);
+   x.font='18px Georgia';x.fillText('If you hear the steps, do not look up.',48,92);
+   x.fillText('9:15. The clock. The wardrobe.',48,128);
+   x.fillStyle='#7e2821';x.font='italic 19px Georgia';x.fillText('He hears what you let him.',48,180);
+ });
+ const paperMat=mat(0xffffff,.96,0,paperTex,{side:THREE.DoubleSide});
+ const tapeTex=canvasTex((x,w,h)=>{
+   x.fillStyle='#272725';x.fillRect(0,0,w,h);
+   for(let i=0;i<1200;i++){x.fillStyle=`rgba(210,205,180,${Math.random()*.08})`;x.fillRect(Math.random()*w,Math.random()*h,Math.random()*9+1,1)}
+   x.fillStyle='#c6b99a';x.fillRect(30,34,w-60,h-68);
+   x.fillStyle='#302a21';x.font='bold 25px monospace';x.fillText('BLACKWOOD / 07',48,80);
+   x.font='18px monospace';x.fillText('MIRA — SIDE B',48,117);x.fillText('31.10.87   03:14 AM',48,151);
+   x.strokeStyle='#3b3126';x.lineWidth=4;x.beginPath();x.moveTo(50,190);x.lineTo(w-50,190);x.stroke();
+   x.font='italic 19px Georgia';x.fillText('DO NOT PLAY ALONE',48,235);
+ });
+ const tapeLabel=mat(0xffffff,.8,0,tapeTex);
+ // Rebuild the straight asphalt as a meandering, banked road ribbon.
+ // Cover the original rectangle with forest ground, then lay the winding road over it.
+ const oldRoad=scene.children.find(o=>o.geometry && o.geometry.type==='PlaneGeometry' &&
+   o.geometry.parameters && o.geometry.parameters.width===6 && o.geometry.parameters.height===112);
+ if(oldRoad){oldRoad.visible=false;}
+ const roadGround=mat(0x171b19,1,0);
+ const roadCurve=new THREE.CatmullRomCurve3([
+   new V(-.2,.025,43),new V(.8,.025,28),new V(1.65,.025,13),
+   new V(.6,.025,1),new V(-1.8,.025,-11),new V(-2.25,.025,-24),
+   new V(-1.0,.025,-36),new V(.9,.025,-46),new V(1.2,.025,-56),
+   new V(.1,.025,-63)
+ ]);
+ const roadGeo=new THREE.BufferGeometry(),positions=[],uv=[],indices=[];
+ const segments=220,halfWidth=3.45;
+ for(let i=0;i<=segments;i++){
+   const t=i/segments,p=roadCurve.getPoint(t),tan=roadCurve.getTangent(t);
+   const nx=-tan.z,nz=tan.x;
+   for(const side of [-1,1]){
+     positions.push(p.x+nx*halfWidth*side,p.y,p.z+nz*halfWidth*side);
+     uv.push(side===-1?0:1,t*18);
+   }
+   if(i<segments){const a=i*2;indices.push(a,a+1,a+2,a+1,a+3,a+2)}
+ }
+ roadGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+ roadGeo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));roadGeo.setIndex(indices);roadGeo.computeVertexNormals();
+ const asphalt=mat(0x292c2c,.98,0,canvasTex((x,w,h)=>{
+   x.fillStyle='#303333';x.fillRect(0,0,w,h);
+   for(let i=0;i<8500;i++){const v=25+Math.random()*48;x.fillStyle=`rgba(${v},${v},${v},${Math.random()*.18})`;x.fillRect(Math.random()*w,Math.random()*h,Math.random()*4+1,Math.random()*3+1)}
+   for(let i=0;i<25;i++){x.strokeStyle=`rgba(8,9,9,${Math.random()*.32})`;x.lineWidth=Math.random()*2+1;x.beginPath();let a=Math.random()*w,b=Math.random()*h;x.moveTo(a,b);for(let j=0;j<5;j++){a+=(Math.random()-.5)*60;b+=Math.random()*24;x.lineTo(a,b)}x.stroke()}
+ },512,512));
+ const roadMesh=new THREE.Mesh(roadGeo,asphalt);roadMesh.receiveShadow=true;roadMesh.frustumCulled=false;scene.add(roadMesh);
+ // Uneven verges, puddles and broken edge stones make the road sit in the forest.
+ for(let i=0;i<95;i++){
+   const t=Math.random(),p=roadCurve.getPoint(t),tan=roadCurve.getTangent(t),side=Math.random()<.5?-1:1;
+   const x=p.x+(-tan.z)*side*(3.8+Math.random()*2.6),z=p.z+tan.x*side*(3.8+Math.random()*2.6);
+   const g=Math.random()<.65?new THREE.DodecahedronGeometry(.12+Math.random()*.28,1):new THREE.IcosahedronGeometry(.12+Math.random()*.22,1);
+   const o=add(g,x,.12,z,Math.random()<.6?woodEdge:plaster);o.rotation.set(Math.random()*2,Math.random()*2,Math.random()*2);o.scale.y=.25+Math.random()*.6;
+ }
+ // Detailed paper note at the exact location used by the interaction prompt.
+ const noteGroup=new THREE.Group();noteGroup.position.set(-5.5,.075,-66);noteGroup.rotation.set(-.04,.18,-.08);scene.add(noteGroup);
+ const sheet= new THREE.Mesh(new THREE.PlaneGeometry(.78,1.05,16,22),paperMat);sheet.rotation.x=-Math.PI/2;sheet.position.y=.035;sheet.castShadow=true;sheet.receiveShadow=true;noteGroup.add(sheet);
+ // Folded corners and paper curl are real geometry, not a flat UI icon.
+ const curl=add(new THREE.ConeGeometry(.09,.18,12),paperMat,-5.5,1.07,-66,false,false);curl.rotation.z=Math.PI/2;curl.visible=false;
+ const creaseMat=mat(0x81745d,.98,0,null,{transparent:true,opacity:.5});
+ for(let i=0;i<5;i++){
+   const line=add(new THREE.BoxGeometry(.48,.006,.003),creaseMat,-5.5,1.075+i*.003,-66,false,false);
+   line.rotation.y=.18;noteGroup.add(line);line.position.set((i%2)*.03-.01,.042+i*.002,(i-2)*.115);
+ }
+ // Pencil marks and ink strokes sit slightly above the paper surface.
+ for(let i=0;i<17;i++){
+   const length=.12+Math.random()*.27;
+   const stroke=add(new THREE.BoxGeometry(length,.003,.006),ink,-5.5,1.08,-66,false,false);
+   stroke.position.set((Math.random()-.5)*.36,.047+Math.random()*.001,(Math.random()-.5)*.74);
+   stroke.rotation.y=(Math.random()-.5)*.12;noteGroup.add(stroke);
+ }
+ // Realistic tape cassette with transparent shell, two reels, screws, label and tape windows.
+ const tapeGroup=new THREE.Group();tapeGroup.position.set(4.5,.92,-84.5);tapeGroup.rotation.y=.18;scene.add(tapeGroup);
+ const shell=add(new THREE.BoxGeometry(.42,.09,.27,3,2,3),rubber,0,0,0,rubber);tapeGroup.add(shell);shell.position.set(0,0,0);
+ const label=add(new THREE.PlaneGeometry(.32,.16,8,4),tapeLabel,0,.047,.002,false,false);label.rotation.x=-Math.PI/2;tapeGroup.add(label);
+ for(const x of [-.105,.105]){
+   const reel=add(new THREE.CylinderGeometry(.047,.047,.015,32,2),brass,x,.052,.055,brass);reel.rotation.x=Math.PI/2;tapeGroup.add(reel);
+   const hole=add(new THREE.CylinderGeometry(.014,.014,.017,16),dark,x,.061,.055,dark);hole.rotation.x=Math.PI/2;tapeGroup.add(hole);
+ }
+ for(const x of [-.18,.18])for(const z of [-.105,.105]){
+   const screw=add(new THREE.CylinderGeometry(.008,.008,.006,12),brass,x,.052,z,brass);screw.rotation.x=Math.PI/2;tapeGroup.add(screw);
+ }
+ const tapeWindow=add(new THREE.BoxGeometry(.22,.012,.035,4,1,2),glass,0,.025,-.07,glass);tapeGroup.add(tapeWindow);
+ // Detailed fuse model in the wrecked bus area; stays visible until picked up.
+ const fuseGroup=new THREE.Group();fuseGroup.position.set(-4.7,.95,-12);fuseGroup.rotation.z=.18;scene.add(fuseGroup);
+ const fuseBody=add(new THREE.CylinderGeometry(.055,.055,.48,32,6),glass,0,0,0,glass);fuseBody.rotation.z=Math.PI/2;fuseGroup.add(fuseBody);
+ for(const x of [-.25,.25]){
+   const cap=add(new THREE.CylinderGeometry(.07,.07,.09,32,3),brass,x,0,0,brass);cap.rotation.z=Math.PI/2;fuseGroup.add(cap);
+ }
+ const wire=add(new THREE.CylinderGeometry(.009,.009,.34,12),mat(0xff3d25,.4,.2),0,0,0,mat(0xff3d25,.4,.2));wire.rotation.z=Math.PI/2;fuseGroup.add(wire);
+ // A small folded inventory tag on the fuse, plus metallic end rings.
+ for(const x of [-.22,.22]){
+   const ring=add(new THREE.TorusGeometry(.064,.008,8,32),brass,x,0,0,brass);ring.rotation.y=Math.PI/2;fuseGroup.add(ring);
+ }
+ // Upgrade the old cube-like roadside table into a proper weather-beaten table.
+ // Hide the original primitive blocks at its location; they are visual-only props.
+ scene.children.forEach(o=>{
+   if(!o.geometry||!o.position)return;
+   const p=o.position;
+   if(Math.abs(p.x+3)<1.15&&Math.abs(p.z-29)<2.3&&p.y<2.2)o.visible=false;
+ });
+ const table=new THREE.Group();table.position.set(-3,.0,29);scene.add(table);
+ const tabletop=add(new THREE.BoxGeometry(2.15,.16,1.45,8,2,6),woodEdge,0,.9,0,woodEdge);table.add(tabletop);
+ // Plank seams, chipped edges, nail heads and warped boards.
+ for(let i=0;i<5;i++){
+   const plank=add(new THREE.BoxGeometry(2.1,.035,.27,8,1,3),wood,-0,0,0,wood);
+   plank.position.set(0,.995,(i-2)*.27);plank.rotation.y=(Math.random()-.5)*.025;table.add(plank);
+   for(const x of [-.88,.88]){
+     const nail=add(new THREE.CylinderGeometry(.018,.018,.008,12),brass,x,1.019,(i-2)*.27,brass);
+     nail.rotation.x=Math.PI/2;table.add(nail);
+   }
+ }
+ for(const x of [-.88,.88])for(const z of [-.52,.52]){
+   const leg=add(new THREE.BoxGeometry(.14,.9,.14,3,6,3),wood,x,.45,z,wood);leg.rotation.z=(Math.random()-.5)*.035;table.add(leg);
+   const brace=add(new THREE.BoxGeometry(.12,.12,1.2,2,2,6),woodEdge,x*.78,.38,0,woodEdge);table.add(brace);
+ }
+ const apron1=add(new THREE.BoxGeometry(1.8,.18,.1,5,2,2),wood,-0,.72,.58,wood);table.add(apron1);
+ const apron2=add(new THREE.BoxGeometry(.1,.18,1.1,2,2,4),wood,-.92,.72,0,wood);table.add(apron2);
+ // Add carved dents and splintered ends to the tabletop.
+ for(let i=0;i<24;i++){
+   const mark=add(new THREE.BoxGeometry(.08+Math.random()*.24,.004,.006),dark,(Math.random()-.5)*1.8,1.084,(Math.random()-.5)*1.1,false,false);
+   mark.rotation.y=(Math.random()-.5)*.35;table.add(mark);
+ }
+ // House exterior: layered roof, irregular shingles, timber framing, sill, stone foundation.
+ const house=new THREE.Group();house.position.set(0,0,-72);scene.add(house);
+ const roofL=add(new THREE.BoxGeometry(9.2,.38,9.2,6,2,6),roofMat,-2.5,7.12,0,roofMat);roofL.rotation.z=-.22;house.add(roofL);
+ const roofR=add(new THREE.BoxGeometry(9.2,.38,9.2,6,2,6),roofMat,2.5,7.12,0,roofMat);roofR.rotation.z=.22;house.add(roofR);
+ for(let side of [-1,1])for(let row=0;row<4;row++)for(let col=0;col<9;col++){
+   const shingle=add(new THREE.BoxGeometry(.84,.055,.58,3,1,3),mat(0x242625,.97),side*(.35+col*.49),7.0-row*.2,-3.2+row*.9,mat(0x242625,.97));
+   shingle.rotation.z=side*.22;shingle.rotation.y=(Math.random()-.5)*.035;house.add(shingle);
+ }
+ for(const x of [-7.7,7.7,-4.7,4.7])for(const z of [-7.8,-.3,7.2]){
+   const beam=add(new THREE.BoxGeometry(.18,6.8,.2,3,8,3),woodEdge,x,3.45,z,woodEdge);house.add(beam);
+ }
+ for(const z of [-7.7,7.7]){
+   for(const y of [1.1,3.3,5.6]){
+     const beam=add(new THREE.BoxGeometry(15.2,.16,.22,8,2,2),woodEdge,0,y,z,woodEdge);house.add(beam);
+   }
+ }
+ for(const x of [-7.4,7.4])for(const z of [-6,-3,0,3,6]){
+   const stone=add(new THREE.DodecahedronGeometry(.42,1),mat(0x393b38,.98),x,.35,z,mat(0x393b38,.98));stone.scale.set(1.4,.7,1);house.add(stone);
+ }
+ // Cracked window glass and frame around front facade.
+ for(const x of [-4.4,4.4]){
+   const frame=add(new THREE.BoxGeometry(1.65,2.1,.18,4,5,2),woodEdge,x,4.8,-8.18,woodEdge);house.add(frame);
+   const pane=add(new THREE.PlaneGeometry(1.35,1.8,8,10),glass,x,4.8,-8.27,false,false);house.add(pane);
+   for(const dx of [-.38,0,.38]){
+     const mullion=add(new THREE.BoxGeometry(.035,1.75,.05),woodEdge,x+dx,4.8,-8.31,woodEdge);house.add(mullion);
+   }
+   const cross=add(new THREE.BoxGeometry(1.35,.045,.05),woodEdge,x,4.8,-8.31,woodEdge);house.add(cross);
+   // Cracked-glass radial lines.
+   for(let k=0;k<5;k++){
+     const crack=add(new THREE.BoxGeometry(.008,.48+Math.random()*.35,.003),mat(0x8b9a9b,.25,.1),x+(Math.random()-.5)*.9,4.8+(Math.random()-.5)*.8,-8.32,false,false);
+     crack.rotation.z=Math.random()*1.2;house.add(crack);
+   }
+ }
+ // Bent porch supports, sagging steps, warped boards and a rusty door handle.
+ for(const x of [-2.3,2.3]){
+   const post=add(new THREE.CylinderGeometry(.09,.13,3.8,12,8),woodEdge,x,2.0,-8.4,woodEdge);post.rotation.z=(Math.random()-.5)*.07;house.add(post);
+ }
+ for(let i=0;i<5;i++){
+   const step=add(new THREE.BoxGeometry(4.2-i*.22,.14,.42,8,2,3),woodEdge,0,.12+i*.12,-8.4+i*.42,woodEdge);step.rotation.z=(Math.random()-.5)*.02;house.add(step);
+ }
+ const handle=add(new THREE.TorusGeometry(.055,.012,10,24),brass,1.03,1.65,-64.09,brass);handle.rotation.x=Math.PI/2;
+ // Bus wreck detail: crushed panels, bent window frames, broken glass and seat debris.
+ const busDetail=new THREE.Group();busDetail.position.set(-6.2,1.2,-12);busDetail.rotation.y=-.08;scene.add(busDetail);
+ for(let i=0;i<12;i++){
+   const panel=add(new THREE.BoxGeometry(.08+Math.random()*.4,.03,.5+Math.random()*1.1,3,1,5),rust,(Math.random()-.5)*1.6,(Math.random()-.5)*.6,(Math.random()-.5)*3,rust);
+   panel.rotation.set(Math.random()*.4,Math.random()*1.2,Math.random()*.5);busDetail.add(panel);
+ }
+ for(let i=0;i<8;i++){
+   const shard=add(new THREE.TetrahedronGeometry(.08+Math.random()*.18,1),glass,(Math.random()-.5)*2,(Math.random()-.5)*.3,(Math.random()-.5)*3,glass);
+   shard.rotation.set(Math.random()*2,Math.random()*2,Math.random()*2);busDetail.add(shard);
+ }
+ // Make the physical note and tape respond to proximity with subtle movement.
+ let clock=0;
+ function propMotion(){requestAnimationFrame(propMotion);const dt=Math.min(.05,clock?((performance.now()-clock)/1000):.016);clock=performance.now();
+   if(noteGroup)noteGroup.rotation.z=-.08+Math.sin(clock*.0006)*.008;
+   if(tapeGroup)tapeGroup.rotation.z=Math.sin(clock*.0008)*.015;
+   if(fuseGroup)fuseGroup.rotation.y=Math.sin(clock*.0005)*.025;
+ }
+ propMotion();
+ // Replace the note and tape's existing generic pickups with crafted models, while retaining prompts.
+ // Generic objects at these exact coordinates are hidden to avoid double models.
+ scene.children.forEach(o=>{
+   if(!o.position)return;
+   if(Math.abs(o.position.x+5.5)<.4&&Math.abs(o.position.z+66)<.4&&o.geometry)o.visible=false;
+   if(Math.abs(o.position.x-4.5)<.35&&Math.abs(o.position.z+84.5)<.4&&o.geometry)o.visible=false;
+   if(Math.abs(o.position.x+4.7)<.35&&Math.abs(o.position.z+12)<.4&&o.geometry)o.visible=false;
+ });
 })();
 </script>
 
