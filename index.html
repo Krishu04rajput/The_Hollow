@@ -59,7 +59,7 @@ button:hover:not(:disabled){background:rgba(130,20,20,.14);transform:translateX(
 <button class="tb" id="bI" style="right:168px;bottom:70px">BAG</button><button class="tb" id="bP" style="right:16px;top:50px;width:44px;height:44px">❙❙</button></div>
 
 <div class="ov on" id="menu"><h1>THE HOLLOW</h1><div class="sub">WHERE DARKNESS REMEMBERS</div>
-<button id="mN">New Game</button><button id="mC">Continue</button><button id="mS">Settings</button><button id="mR">Credits</button></div>
+<button id="mN">New Game</button><button id="mC">Continue</button><button id="mS">Settings</button><button id="mE">Enemy: ON</button><button id="mR">Credits</button></div>
 <div class="ov" id="ps"><h2>PAUSED</h2><button id="pR">Resume</button><button id="pS">Settings</button><button id="pQ">Main menu</button><div class="pn" style="font-size:13px;margin-top:14px;color:#7f8b93">WASD move · Mouse look · Shift run · C toggle crouch (Ctrl hold)<br>F flashlight · E interact · M map · Tab inventory · Arrow keys also look · Esc pause</div></div>
 <div class="ov" id="se"><h2>SETTINGS</h2>
 <label>Mouse / look sensitivity<input type="range" data-k="sens" min=".3" max="2" step=".05"></label>
@@ -69,6 +69,7 @@ button:hover:not(:disabled){background:rgba(130,20,20,.14);transform:translateX(
 <label>Sound effects<input type="range" data-k="sv" min="0" max="1" step=".05"></label>
 <label>Subtitles<input type="checkbox" data-k="sub"></label>
 <label>Field of view<input type="range" data-k="fov" min="60" max="100" step="1"></label><label>Invert Y<input type="checkbox" data-k="inv"></label><label>Graphics<select data-k="q"><option value="1">High (shadows, heavy rain)</option><option value="0">Low (phones)</option></select></label>
+<label>Enemy presence <input type="checkbox" data-k="noEnemy" id="enemyToggle"></label><div style="font-size:11px;color:#829099;max-width:320px;line-height:1.5;margin:4px 0 12px">Turn ON to disable the hunting creature for map and puzzle testing. This is a safe exploration mode.</div>
 <button id="sX">Back</button></div>
 <div class="ov" id="cr"><h2>CREDITS</h2><div class="pn">Design, story, code and procedural audio: generated for this project.<br>Engine: three.js · Chapter 1 of 10.</div><button id="cX">Back</button></div>
 <div class="ov" id="dc"><h2 id="dt"></h2><div class="pn" id="db"></div><br><button id="dX">Close</button></div>
@@ -82,7 +83,7 @@ button:hover:not(:disabled){background:rgba(130,20,20,.14);transform:translateX(
 const V3=THREE.Vector3,$=i=>document.getElementById(i),rnd=(a,b)=>a+Math.random()*(b-a);
 function ld(k){try{return JSON.parse(localStorage.getItem(k))||{}}catch(e){return{}}}
 function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-const S=Object.assign({sens:1,bri:1,mv:.6,dv:.9,sv:.8,sub:1,q:1,fov:75,inv:0},ld('hollowS'));
+const S=Object.assign({sens:1,bri:1,mv:.6,dv:.9,sv:.8,sub:1,q:1,fov:75,inv:0,noEnemy:0},ld('hollowS'));
 let G=ld('hollowG');const fresh=()=>({v:1,cp:0,key:0,spare:0,bat:100,docs:[],door:0,solved:0,taken:{},choice:''});
 const touch=matchMedia('(pointer:coarse)').matches||'ontouchstart' in window;
 if(touch&&S.q===1&&!ld('hollowS').q)S.q=0;
@@ -138,11 +139,45 @@ const pl3=new THREE.PointLight(0xff2a1a,.6,7);pl3.position.set(4,2.6,-83);scene.
 const itm={};function item(id,x,y,z,c,w,h){if(G.taken&&G.taken[id])return;const o=box(x,y,z,w,h,w,new THREE.MeshStandardMaterial({color:c,emissive:c,emissiveIntensity:.25,roughness:.5}),0,0);itm[id]=o}
 /* figures */
 const HO=new THREE.Group(),H={p:new V3(-4,0,-34),s:'patrol',wp:0,t:0,f:0,tgt:null,last:null,lost:0,st:0,beat:0};
-(function(){const a=(g,m,x,y,z)=>{const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=true;HO.add(o);return o};
- a(new THREE.BoxGeometry(.55,1.3,.32),mDk,0,2.1,0);H.l=a(new THREE.BoxGeometry(.16,1.5,.16),mDk,-.15,.75,0);H.r=a(new THREE.BoxGeometry(.16,1.5,.16),mDk,.15,.75,0);
- H.al=a(new THREE.BoxGeometry(.1,1.9,.1),mDk,-.4,1.8,.05);H.ar=a(new THREE.BoxGeometry(.1,1.9,.1),mDk,.4,1.8,.05);
- a(new THREE.SphereGeometry(.2,12,10),mSk,0,3,.05).scale.set(.8,1.5,.9);a(new THREE.SphereGeometry(.04,6,6),mDk,-.07,3.05,.2);a(new THREE.SphereGeometry(.04,6,6),mDk,.07,3.05,.2)})();
-scene.add(HO);
+// Chapter III creature model: elongated anatomy, layered torn shroud, scarred procedural textures.
+function makeCreatureTexture(base, accent, seed){
+ const c=document.createElement('canvas');c.width=256;c.height=512;const x=c.getContext('2d');
+ x.fillStyle=base;x.fillRect(0,0,256,512);
+ let n=seed;const rand=()=>{n=(n*1664525+1013904223)>>>0;return n/4294967296};
+ for(let i=0;i<2200;i++){const a=rand(),b=rand(),w=rand()*16+1,h=rand()*9+1;x.fillStyle=`rgba(${accent},${rand()*.2})`;x.fillRect(a*256,b*512,w,h)}
+ for(let i=0;i<22;i++){x.strokeStyle=`rgba(105,112,110,${rand()*.22})`;x.lineWidth=rand()*2+0.4;x.beginPath();let a=rand()*256,b=rand()*512;x.moveTo(a,b);for(let j=0;j<5;j++){a+=(rand()-.5)*35;b+=rand()*35;x.lineTo(a,b)}x.stroke()}
+ const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(1,1);t.anisotropy=4;return t;
+}
+const hideTex=makeCreatureTexture('#090b0c','150,15,19',81),skinTex=makeCreatureTexture('#333332','135,128,119',18);
+const hideMat=new THREE.MeshStandardMaterial({map:hideTex,color:0x777777,roughness:.98,metalness:0,side:THREE.DoubleSide});
+const fleshMat=new THREE.MeshStandardMaterial({map:skinTex,color:0x777777,roughness:.85,metalness:0});
+const woundMat=new THREE.MeshStandardMaterial({color:0x220809,roughness:.8,emissive:0x190000,emissiveIntensity:.35});
+const eyeMat=new THREE.MeshStandardMaterial({color:0x100303,emissive:0xb10c12,emissiveIntensity:1.8,roughness:.18});
+const creaturePart=(geo,matr,pos,scale,rot)=>{const o=new THREE.Mesh(geo,matr);o.position.set(...pos);if(scale)o.scale.set(...scale);if(rot)o.rotation.set(...rot);o.castShadow=true;o.receiveShadow=true;HO.add(o);return o};
+// Torso and narrow, unnaturally long neck.
+creaturePart(new THREE.CapsuleGeometry(.34,1.12,6,10),hideMat,[0,2.05,0],[.82,1.18,.62],[0,0,-.06]);
+creaturePart(new THREE.CylinderGeometry(.105,.17,.92,9),fleshMat,[0,3.12,.015],[1,1,1],[0,0,.04]);
+// Rib-like ridges beneath the ragged surface.
+for(let i=0;i<5;i++){const y=1.72+i*.24;const rib=creaturePart(new THREE.TorusGeometry(.245+i*.008,.025,5,12,Math.PI*1.55),woundMat,[0,y,.16],[1.12,.64,.72],[0,0,Math.PI]);rib.rotation.x=Math.PI/2;}
+// Skull: stretched vertically, with sunken sockets and a split jaw.
+creaturePart(new THREE.SphereGeometry(.205,12,10),fleshMat,[0,3.72,.015],[.78,1.65,.72],[.08,0,-.04]);
+creaturePart(new THREE.SphereGeometry(.135,10,8),hideMat,[0,3.52,.14],[.85,.65,.65],[0,0,0]);
+for(const side of [-1,1]){
+ creaturePart(new THREE.SphereGeometry(.045,8,6),eyeMat,[side*.09,3.77,.174],[1,.7,.55]);
+ creaturePart(new THREE.CapsuleGeometry(.085,.95,4,7),hideMat,[side*.42,2.55,.02],[.8,1.25,.72],[0,0,side*-.12]);
+ creaturePart(new THREE.CapsuleGeometry(.07,1.05,4,7),fleshMat,[side*.49,1.22,.01],[.7,1.15,.7],[0,0,side*.035]);
+ // Long, jointed fingers and black hooked claws.
+ for(let f=0;f<4;f++){const fx=side*(.48+(f-1.5)*.075);creaturePart(new THREE.CapsuleGeometry(.022,.28,2,5),fleshMat,[fx,.61,.06],[.8,1,.8],[0,0,side*(.12+(f-1)*.035)]);creaturePart(new THREE.ConeGeometry(.025,.16,5),woundMat,[fx+side*.015,.39,.07],[1,1,1],[0,0,Math.PI+side*.1]);}
+ // Long, slightly bowed legs and narrow feet.
+ creaturePart(new THREE.CapsuleGeometry(.115,.92,4,7),hideMat,[side*.17,.66,0],[.82,1.35,.9],[0,0,side*-.045]);
+ creaturePart(new THREE.CapsuleGeometry(.105,.34,3,6),fleshMat,[side*.19,.16,.1],[1,.8,1.3],[0,0,side*.04]);
+ // Tattered robe panels hang from shoulder and hip.
+ for(let k=0;k<3;k++){const panel=creaturePart(new THREE.PlaneGeometry(.22+Math.random()*.22,1.25+Math.random()*.8),hideMat,[side*(.22+k*.11),1.85-k*.09,-.16-k*.015],[1,1,1],[0,side*.12,side*(.08+k*.1)]);panel.material=hideMat;}
+}
+// Fine, asymmetrical shroud strips trail from the back; subtle animated motion is added in the update layer.
+const shroud=[];for(let i=0;i<7;i++){const m=new THREE.Mesh(new THREE.PlaneGeometry(.12+Math.random()*.16,1.1+Math.random()*1.1),hideMat);m.position.set((Math.random()-.5)*.7,1.55+Math.random()*.45,-.25);m.rotation.set((Math.random()-.5)*.2,(Math.random()-.5)*.4,(Math.random()-.5)*.3);m.castShadow=true;HO.add(m);shroud.push(m)}
+H.l={rotation:{x:0}};H.r={rotation:{x:0}};H.al={rotation:{x:0}};H.ar={rotation:{x:0}};H.shroud=shroud;
+scene.add(HO);HO.scale.set(1,1.22,1);
 function person(h,c){const g=new THREE.Group(),m=new THREE.MeshStandardMaterial({color:c,roughness:.9,emissive:0x151515});
  const b=new THREE.Mesh(new THREE.BoxGeometry(.4*h,.8*h,.22*h),m);b.position.y=.7*h;const hd=new THREE.Mesh(new THREE.SphereGeometry(.16*h,10,8),mSk);hd.position.y=1.28*h;g.add(b,hd);g.visible=false;scene.add(g);return g}
 const WF=person(1.2,0x050505),CH=person(.8,0x9a9a9a);WF.position.set(3.5,4.4,-63.6);CH.position.set(0,0,-76.5);
@@ -250,7 +285,7 @@ function caught(){mode='dead';$('fd').style.transition='opacity .3s';$('fd').sty
  setTimeout(()=>{respawn();$('fd').textContent='';$('fd').style.transition='opacity 1.5s';$('fd').style.opacity=0;mode='play'},3000)}
 const SP=[[0,34],[2,-53],[0,-66],[0,-77]];
 function respawn(){const s=SP[G.cp];P.x=s[0];P.z=s[1];P.hid=0;P.yaw=0;P.stam=100;setHollow()}
-function setHollow(){if(G.cp>=2){WP=WPI;H.p.set(4,0,-67);H.wp=8}else{WP=WPX;H.p.set(-4,0,-34);H.wp=0}H.s='patrol';H.t=0;H.f=Math.PI;EV.in=G.cp>=2?1:0}
+function setHollow(){HO.visible=!S.noEnemy;if(G.cp>=2){WP=WPI;H.p.set(4,0,-67);H.wp=8}else{WP=WPX;H.p.set(-4,0,-34);H.wp=0}H.s='patrol';H.t=0;H.f=Math.PI;EV.in=G.cp>=2?1:0}
 /* ---------- input ---------- */
 addEventListener('keydown',e=>{K[e.code]=1;if(e.code=='Tab')e.preventDefault();if(mode!='play'||ui=='tp'||ui=='en')return;
  if(e.code=='KeyE'){if(ui&&ui!='clk'&&ui!='ps')closeUI();else if(!ui)use()}
@@ -324,17 +359,17 @@ function upd(dt){
  if(G.door){doorA=Math.min(1,doorA+dt*.5);dr.rotation.y=-1.6*doorA}
  const t=performance.now()/1000;wM.color.setScalar(1);wM.color.setRGB(Math.random()>.96?.2:1,Math.random()>.96?.1:.78,Math.random()>.96?.05:.42);
  const pw=G.power?1:.25;pl1.intensity=(Math.random()>.97?.05:.9)*pw;pl2.intensity=(Math.random()>.95?.1:.7)*pw;lampL.forEach((l,i)=>l.intensity=Math.random()>.97-i*.04?.15:1.2);
- if(!EV.w&&P.z<-38&&!P.hid){EV.w=1;WF.visible=true;snd('whisper',WF.position);say('Mira?','“Arin… don’t come in.”',4000);setTimeout(()=>WF.visible=false,5500)}
+ if(!EV.w&&P.z<-38&&!P.hid){EV.w=1;WF.visible=!S.noEnemy;snd('whisper',WF.position);say('Mira?','“Arin… don’t come in.”',4000);setTimeout(()=>WF.visible=false,5500)}
  if(!EV.in&&inH({x:P.x,z:P.z})&&P.z<-65){EV.in=1;EV.tk=0;cp(2);WP=WPI;H.p.set(-4,0,-77);H.s='patrol';H.wp=3;H.f=0;objv('The house is dark and dead. Find the fuse box in the hall — you’ll need a fuse.');say('Arin','This is our hall. The wallpaper… I picked it myself.',4000)}
  if(EV.in&&G.cp<3){EV.tk=(EV.tk||0)+dt;if(EV.tk>9&&!EV.k){EV.k=1;[0,1,2].forEach(i=>setTimeout(()=>snd('knock',new V3(-8.6,1.5,-70)),i*900));say('','Three knocks. From inside the wall.',3500)}
   if(EV.tk>24&&!EV.fs){EV.fs=1;for(let i=0;i<5;i++)setTimeout(()=>snd('step',new V3(P.x+Math.sin(P.yaw)*2+rnd(-1,1),0,P.z+Math.cos(P.yaw)*2)),i*550);say('','Footsteps behind you. Nothing is there.',4000)}
-  if(EV.tk>6&&!EV.ch&&P.z>-71&&P.z<-65){EV.ch=1;CH.visible=true;pl2.intensity=0;snd('breath',new V3(0,1,-76));setTimeout(()=>{CH.visible=false;EV.dr=1;objv('The child left something behind.')},6500)}
+  if(EV.tk>6&&!EV.ch&&P.z>-71&&P.z<-65){EV.ch=1;CH.visible=!S.noEnemy;pl2.intensity=0;snd('breath',new V3(0,1,-76));setTimeout(()=>{CH.visible=false;EV.dr=1;objv('The child left something behind.')},6500)}
   if(CH.visible&&d2(P,{x:0,z:-76.5})<5){CH.visible=false;EV.dr=1}
   if(EV.med&&!EV.wh){EV.wh=1;setTimeout(()=>{snd('whisper',new V3(P.x-2,1.5,P.z));say('The Witness','“Nine fifteen. She never slept past it.”',4000)},4000)}}
  if(EV.sh&&P.z<-80&&!EV.h2){EV.h2=1;objv('Take the tape.')}
  /* lightning */
  thunderT-=dt;if(thunderT<0){thunderT=rnd(20,42);flash=1;setTimeout(()=>snd('thunder'),rnd(400,1800))}
- ai(dt)}
+ if(!S.noEnemy)ai(dt);else{HO.visible=false;H.s='disabled';if(droneG)droneG.gain.value+=(.012-droneG.gain.value)*dt}}
 function slide(p,r){for(const b of W){const cx=Math.max(b.x0,Math.min(p.x,b.x1)),cz=Math.max(b.z0,Math.min(p.z,b.z1));let dx=p.x-cx,dz=p.z-cz,d=dx*dx+dz*dz;if(d<r*r){if(d>1e-6){d=Math.sqrt(d);p.x+=dx/d*(r-d);p.z+=dz/d*(r-d)}else p.x=b.x0-r}}}
 function lst(){if(!AC)return;const L=AC.listener;cam.getWorldDirection(dirV);if(L.positionX){L.positionX.value=cam.position.x;L.positionY.value=cam.position.y;L.positionZ.value=cam.position.z;L.forwardX.value=dirV.x;L.forwardY.value=dirV.y;L.forwardZ.value=dirV.z;L.upX.value=0;L.upY.value=1;L.upZ.value=0}else{L.setPosition(cam.position.x,cam.position.y,cam.position.z);L.setOrientation(dirV.x,dirV.y,dirV.z,0,1,0)}
  if(rainG)rainG.gain.value=indoor()?.05:.22}
@@ -499,7 +534,7 @@ loop();
  function dist2(x1,z1,x2,z2){return Math.hypot(x1-x2,z1-z2)}
  function directorV3(){
   requestAnimationFrame(directorV3);
-  if(typeof P==='undefined'||typeof mode==='undefined'||mode!=='play'||ui){apparitionAlpha=Math.max(0,apparitionAlpha-.04);setOpacity();return}
+  if(S.noEnemy){apparitionAlpha=0;apparition.visible=false;setOpacity();return}if(typeof P==='undefined'||typeof mode==='undefined'||mode!=='play'||ui){apparitionAlpha=Math.max(0,apparitionAlpha-.04);setOpacity();return}
   const dt=Math.min(.05,(performance.now()-lastPulse)/1000||.016);lastPulse=performance.now();
   apparitionTimer+=dt;apparitionCooldown-=dt;
   echoes.forEach((e,i)=>{const o=echoMeshes[e.id];if(o&&o.g.visible){o.g.rotation.y+=dt*(i%2?-.6:.8);o.core.rotation.x+=dt*.45;o.halo.scale.setScalar(1+Math.sin(apparitionTimer*2+i)*.09)}});
@@ -533,4 +568,37 @@ loop();
 })();
 
 </script>
+
+<script>
+/* ===== THE HOLLOW — Chapter III: creature detail, safe exploration & atmosphere ===== */
+(()=>{
+ const $=id=>document.getElementById(id);
+ const menuToggle=$('mE');
+ function applyEnemyMode(){
+   S.noEnemy=Number(!!S.noEnemy);sv('hollowS',S);
+   if(menuToggle)menuToggle.textContent='Enemy: '+(S.noEnemy?'OFF — SAFE EXPLORATION':'ON — HORROR MODE');
+   const toggle=$('enemyToggle');if(toggle)toggle.checked=!!S.noEnemy;
+   if(typeof HO!=='undefined')HO.visible=!S.noEnemy;
+   if(S.noEnemy&&typeof H!=='undefined')H.s='disabled';
+   const tag=$('safeModeTag');
+   if(S.noEnemy){if(!tag){const t=document.createElement('div');t.id='safeModeTag';t.textContent='SAFE EXPLORATION · ENEMY DISABLED';t.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:12;color:#b5c8c9;background:#05090ddd;border:1px solid #536466;padding:8px 12px;font:10px Georgia,serif;letter-spacing:.18em;pointer-events:none';document.body.appendChild(t)}}else if(tag)tag.remove();
+ }
+ if(menuToggle)menuToggle.addEventListener('click',()=>{S.noEnemy=!S.noEnemy;applyEnemyMode()});
+ const toggle=$('enemyToggle');if(toggle)toggle.addEventListener('change',()=>{S.noEnemy=toggle.checked;applyEnemyMode()});
+ // Wrap the renderer's animation loop state without changing its movement or puzzle code.
+ const oldSetHollow=typeof setHollow==='function'?setHollow:null;
+ // Add faint breathing sway to the creature's hanging strips and a tiny head tilt while it moves.
+ let prev=performance.now();function creatureMotion(){requestAnimationFrame(creatureMotion);const now=performance.now(),dt=Math.min(.05,(now-prev)/1000);prev=now;
+  if(typeof HO==='undefined'||!HO.visible||S.noEnemy)return;
+  const t=now*.001;HO.scale.y=1.22+Math.sin(t*1.8)*.012;
+  if(H.shroud)H.shroud.forEach((o,i)=>{o.rotation.x=Math.sin(t*1.3+i*1.7)*.07;o.rotation.z+=Math.sin(t*.7+i)*dt*.012});
+  // Eyes remain barely visible through the fog, never a bright cartoon glow.
+  if(H.s==='chase')HO.children.forEach(o=>{if(o.material===eyeMat)o.material.emissiveIntensity=1.5+Math.sin(t*18)*.5});
+ }
+ applyEnemyMode();creatureMotion();
+ // If safe mode is enabled mid-session, the creature stays absent and the score remains calm.
+ const oldIntro=typeof start==='function'?start:null;
+})();
+</script>
+
 </body></html>
